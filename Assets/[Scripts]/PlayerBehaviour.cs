@@ -2,14 +2,20 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
 public class PlayerBehaviour : MonoBehaviour
 {
     [Header("Movement")]
     public float horizontalForce;
     public float verticalForce;
+    [Range(0.1f, 0.99f)]
+    public float airControlFactor = 0.5f;
     public bool isGrounded;
 
     private Rigidbody2D rigidbody;
+    private Animator animator;
+
+    public PlayerAnimationStates state;
 
     public Transform groundOrigin;
     public float groundRadius;
@@ -19,7 +25,7 @@ public class PlayerBehaviour : MonoBehaviour
     void Start()
     {
         rigidbody = GetComponent<Rigidbody2D>();
-        
+        animator = GetComponent<Animator>();
     }
 
     // Update is called once per frame
@@ -32,16 +38,21 @@ public class PlayerBehaviour : MonoBehaviour
 
     private void Move()
     {
-        if(isGrounded)
+        float x = Input.GetAxisRaw("Horizontal");
+        if (x != 0)
+        {
+            FlipAnimation(x);
+        }
+
+        if (isGrounded)
         {
 
-            float x = Input.GetAxisRaw("Horizontal");
             float y = Input.GetAxisRaw("Vertical");
             float jump = Input.GetAxisRaw("Jump");
 
-            //check sprite flip
-            if(x != 0)
-                FlipAnimation(x);
+            //set animation state based on x input
+            state = (x == 0) ? PlayerAnimationStates.Idle : PlayerAnimationStates.Running;
+          
 
             Vector2 worldTouch = new Vector2();
             foreach (var touch in Input.touches)
@@ -52,21 +63,22 @@ public class PlayerBehaviour : MonoBehaviour
             float horizontalMoveForce = x * horizontalForce;
             float jumpMoveForce = jump * verticalForce;
 
-            float mass = rigidbody.mass * rigidbody.gravityScale;
-
-            rigidbody.AddForce(new Vector2(horizontalMoveForce, jumpMoveForce) * mass);
-
-            Vector2 velocity = rigidbody.velocity;
-            velocity.x *= 0.99f;
-            rigidbody.velocity = velocity;
-            //
-
+            AddForce(horizontalMoveForce, jumpMoveForce);
         }
+        else
+        {
+            state = PlayerAnimationStates.Jumping;
+
+            float horizontalMoveForce = x * horizontalForce * airControlFactor;
+            AddForce(horizontalMoveForce, 0.0f);
+        }
+
+        animator.SetInteger("AnimationState", (int)state);
     }
 
     private void CheckIfGrounded()
     {
-        RaycastHit2D hit = Physics2D.CircleCast(groundOrigin.position, groundRadius, Vector2.down, float.Epsilon, groundLayerMask);
+        RaycastHit2D hit = Physics2D.CircleCast(groundOrigin.position, groundRadius, Vector2.down, groundRadius, groundLayerMask);
 
         isGrounded = (hit) ? true: false;
     }
@@ -82,7 +94,17 @@ public class PlayerBehaviour : MonoBehaviour
     }
 
 
+    private void AddForce(float xForce, float yForce)
+    {
+        float mass = rigidbody.mass * rigidbody.gravityScale;
 
+        rigidbody.AddForce(new Vector2(xForce, yForce) * mass);
+
+        Vector2 velocity = rigidbody.velocity;
+        velocity.x *= 0.9f;
+        velocity.y *= 0.99f;
+        rigidbody.velocity = velocity;
+    }
 
 
     private void OnDrawGizmos()
